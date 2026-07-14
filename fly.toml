@@ -1,0 +1,24 @@
+app = "taskboard-gv"
+primary_region = "lhr"
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[checks]
+  [checks.health]
+    type = "http"
+    port = 8080
+    path = "/actuator/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
