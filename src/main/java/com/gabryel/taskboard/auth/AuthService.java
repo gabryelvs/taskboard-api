@@ -62,12 +62,22 @@ public class AuthService {
 
     @Transactional
     public AuthResponse refresh(String refreshToken) {
-        throw new UnsupportedOperationException("implemented in Task 5");
+        RefreshToken stored = refreshTokens.findByTokenHash(sha256(refreshToken))
+                .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+        if (stored.isRevoked() || stored.getExpiresAt().isBefore(Instant.now())) {
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+        stored.setRevoked(true);
+        refreshTokens.save(stored);
+        return issueTokens(stored.getUser());
     }
 
     @Transactional
     public void logout(String refreshToken) {
-        throw new UnsupportedOperationException("implemented in Task 5");
+        refreshTokens.findByTokenHash(sha256(refreshToken)).ifPresent(rt -> {
+            rt.setRevoked(true);
+            refreshTokens.save(rt);
+        });
     }
 
     AuthResponse issueTokens(User user) {
