@@ -119,4 +119,78 @@ class CardMoveTest extends IntegrationTest {
             org.assertj.core.api.Assertions.assertThat(arr.get(i).get("position").asInt()).isEqualTo(i);
         }
     }
+
+    @Test
+    void sameColumnMoveToTailStaysDense() throws Exception {
+        String t = TestUsers.registerAndLogin(mvc, om, "move6@test.com");
+        String pid = TestBoards.createProject(mvc, om, t, "Board");
+        String col = TestBoards.createColumn(mvc, om, t, pid, "Todo");
+        String a = TestBoards.createCard(mvc, om, t, col, "A");
+        TestBoards.createCard(mvc, om, t, col, "B");
+        TestBoards.createCard(mvc, om, t, col, "C");
+
+        move(t, a, col, 99, 200);
+
+        mvc.perform(get("/columns/" + col + "/cards").header("Authorization", "Bearer " + t))
+           .andExpect(jsonPath("$.length()").value(3))
+           .andExpect(jsonPath("$[0].title").value("B"))
+           .andExpect(jsonPath("$[0].position").value(0))
+           .andExpect(jsonPath("$[1].title").value("C"))
+           .andExpect(jsonPath("$[1].position").value(1))
+           .andExpect(jsonPath("$[2].title").value("A"))
+           .andExpect(jsonPath("$[2].position").value(2));
+    }
+
+    @Test
+    void concurrentSameCardMovesKeepInvariant() throws Exception {
+        String t = TestUsers.registerAndLogin(mvc, om, "move7@test.com");
+        String pid = TestBoards.createProject(mvc, om, t, "Board");
+        String src = TestBoards.createColumn(mvc, om, t, pid, "Todo");
+        String dst = TestBoards.createColumn(mvc, om, t, pid, "Done");
+        String card = TestBoards.createCard(mvc, om, t, src, "N0");
+        TestBoards.createCard(mvc, om, t, dst, "N1");
+        TestBoards.createCard(mvc, om, t, dst, "N2");
+
+        String[] targets = { dst, src, dst, src };
+        int[] positions = { 0, 0, 1, 1 };
+
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+        var futures = new java.util.ArrayList<java.util.concurrent.Future<Integer>>();
+        for (int i = 0; i < 4; i++) {
+            final String tgt = targets[i];
+            final int pos = positions[i];
+            futures.add(pool.submit(() -> mvc.perform(patch("/cards/" + card + "/move")
+                    .header("Authorization", "Bearer " + t)
+                    .contentType("application/json")
+                    .content("{\"columnId\":\"" + tgt + "\",\"position\":" + pos + "}"))
+               .andReturn().getResponse().getStatus()));
+        }
+        for (var f : futures) {
+            int status = f.get();
+            org.assertj.core.api.Assertions.assertThat(status).isIn(200, 409);
+        }
+        pool.shutdown();
+
+        String srcBody = mvc.perform(get("/columns/" + src + "/cards")
+                .header("Authorization", "Bearer " + t))
+                .andReturn().getResponse().getContentAsString();
+        String dstBody = mvc.perform(get("/columns/" + dst + "/cards")
+                .header("Authorization", "Bearer " + t))
+                .andReturn().getResponse().getContentAsString();
+        var srcArr = om.readTree(srcBody);
+        var dstArr = om.readTree(dstBody);
+
+        boolean inSrc = false;
+        for (var node : srcArr) if (node.get("title").asText().equals("N0")) inSrc = true;
+        boolean inDst = false;
+        for (var node : dstArr) if (node.get("title").asText().equals("N0")) inDst = true;
+        org.assertj.core.api.Assertions.assertThat(inSrc ^ inDst).isTrue();
+
+        for (int i = 0; i < srcArr.size(); i++) {
+            org.assertj.core.api.Assertions.assertThat(srcArr.get(i).get("position").asInt()).isEqualTo(i);
+        }
+        for (int i = 0; i < dstArr.size(); i++) {
+            org.assertj.core.api.Assertions.assertThat(dstArr.get(i).get("position").asInt()).isEqualTo(i);
+        }
+    }
 }

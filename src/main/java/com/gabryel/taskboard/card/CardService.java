@@ -6,12 +6,15 @@ import com.gabryel.taskboard.card.CardDtos.*;
 import com.gabryel.taskboard.column.BoardColumn;
 import com.gabryel.taskboard.column.BoardColumnRepository;
 import com.gabryel.taskboard.column.ColumnService;
+import com.gabryel.taskboard.common.ConflictException;
 import com.gabryel.taskboard.common.NotFoundException;
 import com.gabryel.taskboard.common.ProjectAccessService;
+import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -22,15 +25,17 @@ public class CardService {
     private final ColumnService columnService;
     private final BoardColumnRepository columns;
     private final ProjectAccessService access;
+    private final EntityManager em;
 
     public CardService(CardRepository cards, UserRepository users,
                        ColumnService columnService, BoardColumnRepository columns,
-                       ProjectAccessService access) {
+                       ProjectAccessService access, EntityManager em) {
         this.cards = cards;
         this.users = users;
         this.columnService = columnService;
         this.columns = columns;
         this.access = access;
+        this.em = em;
     }
 
     /** Loads a card and verifies the caller is a member of its project (404 otherwise). */
@@ -106,12 +111,20 @@ public class CardService {
 
         // serialize concurrent moves per project: lock source and target column rows
         // in deterministic id order to avoid deadlock
-        UUID sourceColumnId = card.getColumn().getId();
-        java.util.stream.Stream.of(sourceColumnId, target.getId())
+        Set<UUID> lockedColumnIds = java.util.stream.Stream.of(card.getColumn().getId(), target.getId())
                 .distinct().sorted()
-                .forEach(colId -> columns.lockById(colId));
+                .peek(colId -> columns.lockById(colId))
+                .collect(java.util.stream.Collectors.toSet());
 
+        // re-read the card now that we hold the column locks: another mover of the
+        // same card may have committed between requireCard() and the locks above
+        em.refresh(card);
+        UUID sourceColumnId = card.getColumn().getId();
+        if (!lockedColumnIds.contains(sourceColumnId)) {
+            throw new ConflictException("Card was moved concurrently, retry");
+        }
         int oldPos = card.getPosition();
+        boolean sameColumn = sourceColumnId.equals(target.getId());
 
         // 1. remove from source: park the card out of the way, close the gap
         card.setPosition(-1);
@@ -120,6 +133,7 @@ public class CardService {
 
         // 2. clamp target position
         int targetCount = cards.countByColumnId(target.getId());
+        if (sameColumn) targetCount--;
         int newPos = Math.min(Math.max(req.position(), 0), targetCount);
 
         // 3. open gap in target and drop the card in
