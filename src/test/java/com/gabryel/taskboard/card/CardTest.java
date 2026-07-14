@@ -85,6 +85,36 @@ class CardTest extends IntegrationTest {
     }
 
     @Test
+    void concurrentCreatesKeepPositionsDense() throws Exception {
+        String t = TestUsers.registerAndLogin(mvc, om, "card7@test.com");
+        String pid = TestBoards.createProject(mvc, om, t, "Board");
+        String col = TestBoards.createColumn(mvc, om, t, pid, "Todo");
+
+        // fire 5 card creates into the same column from parallel threads
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(5);
+        var futures = java.util.stream.IntStream.range(0, 5).mapToObj(i -> pool.submit(() -> {
+            mvc.perform(post("/columns/" + col + "/cards")
+                    .header("Authorization", "Bearer " + t)
+                    .contentType("application/json")
+                    .content("{\"title\":\"N" + i + "\"}"))
+               .andReturn();
+            return null;
+        })).toList();
+        for (var f : futures) f.get();
+        pool.shutdown();
+
+        // invariant: the column holds all 5 cards with dense positions 0..4
+        String body = mvc.perform(get("/columns/" + col + "/cards")
+                .header("Authorization", "Bearer " + t))
+                .andReturn().getResponse().getContentAsString();
+        var arr = om.readTree(body);
+        org.assertj.core.api.Assertions.assertThat(arr.size()).isEqualTo(5);
+        var positions = new java.util.TreeSet<Integer>();
+        for (var node : arr) positions.add(node.get("position").asInt());
+        org.assertj.core.api.Assertions.assertThat(positions).containsExactly(0, 1, 2, 3, 4);
+    }
+
+    @Test
     void assigneeMustBeProjectMember() throws Exception {
         String t = TestUsers.registerAndLogin(mvc, om, "card6a@test.com");
         String outsider = TestUsers.registerAndLogin(mvc, om, "card6b@test.com");

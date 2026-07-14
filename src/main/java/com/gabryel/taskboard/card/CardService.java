@@ -65,6 +65,8 @@ public class CardService {
     @Transactional
     public CardResponse create(UUID userId, UUID columnId, CardCreateRequest req) {
         BoardColumn col = columnService.requireColumn(columnId, userId);
+        // lock the column row to serialize concurrent creates so the position count below is stable
+        columns.lockById(columnId);
         Card card = new Card();
         card.setColumn(col);
         card.setTitle(req.title());
@@ -125,8 +127,13 @@ public class CardService {
                 .collect(java.util.stream.Collectors.toSet());
 
         // re-read the card now that we hold the column locks: another mover of the
-        // same card may have committed between requireCard() and the locks above
-        em.refresh(card);
+        // same card may have committed between requireCard() and the locks above.
+        // if the card was deleted concurrently, the refresh fails with EntityNotFoundException.
+        try {
+            em.refresh(card);
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            throw new NotFoundException("Card not found");
+        }
         UUID sourceColumnId = card.getColumn().getId();
         if (!lockedColumnIds.contains(sourceColumnId)) {
             throw new ConflictException("Card was moved concurrently, retry");
