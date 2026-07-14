@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -29,6 +28,9 @@ class ApiExceptionHandlerTest extends IntegrationTest {
         @GetMapping("/test-errors/conflict")
         void conflict() { throw new ConflictException("duplicate"); }
 
+        @GetMapping("/test-errors/unauthorized")
+        void unauthorized() { throw new UnauthorizedException("bad token"); }
+
         @PostMapping("/test-errors/validate")
         void validate(@RequestBody @jakarta.validation.Valid Body body) {}
     }
@@ -45,6 +47,13 @@ class ApiExceptionHandlerTest extends IntegrationTest {
     void forbiddenProduces403() throws Exception {
         mvc.perform(get("/test-errors/forbidden").with(user("u")))
            .andExpect(status().isForbidden())
+           .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void unauthorizedProduces401() throws Exception {
+        mvc.perform(get("/test-errors/unauthorized").with(user("u")))
+           .andExpect(status().isUnauthorized())
            .andExpect(content().contentType("application/problem+json"));
     }
 
