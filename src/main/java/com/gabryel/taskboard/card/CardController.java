@@ -48,4 +48,10 @@ public class CardController {
     public void delete(@AuthenticationPrincipal UUID userId, @PathVariable UUID id) {
         service.delete(userId, id);
     }
+
+    @PatchMapping("/cards/{id}/move")
+    public CardResponse move(@AuthenticationPrincipal UUID userId, @PathVariable UUID id,
+                             @Valid @RequestBody MoveRequest req) {
+        return service.move(userId, id, req);
+    }
 }

@@ -4,6 +4,7 @@ import com.gabryel.taskboard.auth.User;
 import com.gabryel.taskboard.auth.UserRepository;
 import com.gabryel.taskboard.card.CardDtos.*;
 import com.gabryel.taskboard.column.BoardColumn;
+import com.gabryel.taskboard.column.BoardColumnRepository;
 import com.gabryel.taskboard.column.ColumnService;
 import com.gabryel.taskboard.common.NotFoundException;
 import com.gabryel.taskboard.common.ProjectAccessService;
@@ -19,13 +20,16 @@ public class CardService {
     private final CardRepository cards;
     private final UserRepository users;
     private final ColumnService columnService;
+    private final BoardColumnRepository columns;
     private final ProjectAccessService access;
 
     public CardService(CardRepository cards, UserRepository users,
-                       ColumnService columnService, ProjectAccessService access) {
+                       ColumnService columnService, BoardColumnRepository columns,
+                       ProjectAccessService access) {
         this.cards = cards;
         this.users = users;
         this.columnService = columnService;
+        this.columns = columns;
         this.access = access;
     }
 
@@ -90,6 +94,39 @@ public class CardService {
         cards.delete(card);
         cards.flush();
         cards.shiftDownAfter(columnId, pos);
+    }
+
+    @Transactional
+    public CardResponse move(UUID userId, UUID cardId, MoveRequest req) {
+        Card card = requireCard(cardId, userId);
+        BoardColumn target = columnService.requireColumn(req.columnId(), userId);
+        if (!target.getProject().getId().equals(card.getColumn().getProject().getId())) {
+            throw new NotFoundException("Column not found");
+        }
+
+        // serialize concurrent moves per project: lock source and target column rows
+        // in deterministic id order to avoid deadlock
+        UUID sourceColumnId = card.getColumn().getId();
+        java.util.stream.Stream.of(sourceColumnId, target.getId())
+                .distinct().sorted()
+                .forEach(colId -> columns.lockById(colId));
+
+        int oldPos = card.getPosition();
+
+        // 1. remove from source: park the card out of the way, close the gap
+        card.setPosition(-1);
+        cards.saveAndFlush(card);
+        cards.shiftDownAfter(sourceColumnId, oldPos);
+
+        // 2. clamp target position
+        int targetCount = cards.countByColumnId(target.getId());
+        int newPos = Math.min(Math.max(req.position(), 0), targetCount);
+
+        // 3. open gap in target and drop the card in
+        cards.shiftUpFrom(target.getId(), newPos);
+        card.setColumn(target);
+        card.setPosition(newPos);
+        return CardDtos.toResponse(cards.saveAndFlush(card));
     }
 
     private User resolveMember(UUID projectId, UUID assigneeId) {
