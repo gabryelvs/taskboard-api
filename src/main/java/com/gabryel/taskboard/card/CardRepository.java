@@ -29,7 +29,13 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
           and (:priority is null or c.priority = :priority)
           and (cast(:dueBefore as timestamp) is null or c.deadline < :dueBefore)
           and (:assigneeId is null or c.assignee.id = :assigneeId)
-        order by c.deadline asc nulls last, c.priority desc
+        order by c.deadline asc nulls last,
+          case c.priority
+            when com.gabryel.taskboard.card.Priority.URGENT then 0
+            when com.gabryel.taskboard.card.Priority.HIGH then 1
+            when com.gabryel.taskboard.card.Priority.MEDIUM then 2
+            else 3
+          end asc
         """)
     List<Card> filter(UUID projectId, Priority priority, Instant dueBefore, UUID assigneeId);
 }

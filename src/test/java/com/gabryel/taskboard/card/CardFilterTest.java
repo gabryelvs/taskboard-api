@@ -49,4 +49,32 @@ class CardFilterTest extends IntegrationTest {
         mvc.perform(get("/projects/" + pid + "/cards").header("Authorization", "Bearer " + t2))
            .andExpect(status().isNotFound());
     }
+
+    @Test
+    void filterSortsByPriorityUrgencyRank() throws Exception {
+        String t = TestUsers.registerAndLogin(mvc, om, "filter3@test.com");
+        String pid = TestBoards.createProject(mvc, om, t, "Board");
+        String col = TestBoards.createColumn(mvc, om, t, pid, "Todo");
+
+        mvc.perform(post("/columns/" + col + "/cards").header("Authorization", "Bearer " + t)
+                .contentType("application/json")
+                .content("{\"title\":\"LowCard\",\"priority\":\"LOW\"}"));
+        mvc.perform(post("/columns/" + col + "/cards").header("Authorization", "Bearer " + t)
+                .contentType("application/json")
+                .content("{\"title\":\"HighCard\",\"priority\":\"HIGH\"}"));
+        mvc.perform(post("/columns/" + col + "/cards").header("Authorization", "Bearer " + t)
+                .contentType("application/json")
+                .content("{\"title\":\"UrgentCard\",\"priority\":\"URGENT\"}"));
+        mvc.perform(post("/columns/" + col + "/cards").header("Authorization", "Bearer " + t)
+                .contentType("application/json")
+                .content("{\"title\":\"MediumCard\",\"priority\":\"MEDIUM\"}"));
+
+        mvc.perform(get("/projects/" + pid + "/cards").header("Authorization", "Bearer " + t))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.length()").value(4))
+           .andExpect(jsonPath("$[0].priority").value("URGENT"))
+           .andExpect(jsonPath("$[1].priority").value("HIGH"))
+           .andExpect(jsonPath("$[2].priority").value("MEDIUM"))
+           .andExpect(jsonPath("$[3].priority").value("LOW"));
+    }
 }
