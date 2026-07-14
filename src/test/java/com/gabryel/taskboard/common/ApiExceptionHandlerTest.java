@@ -31,6 +31,12 @@ class ApiExceptionHandlerTest extends IntegrationTest {
         @GetMapping("/test-errors/unauthorized")
         void unauthorized() { throw new UnauthorizedException("bad token"); }
 
+        @GetMapping("/test-errors/entity-not-found")
+        void entityNotFound() { throw new jakarta.persistence.EntityNotFoundException("gone"); }
+
+        @GetMapping("/test-errors/data-integrity")
+        void dataIntegrity() { throw new org.springframework.dao.DataIntegrityViolationException("dup"); }
+
         @PostMapping("/test-errors/validate")
         void validate(@RequestBody @jakarta.validation.Valid Body body) {}
     }
@@ -61,6 +67,21 @@ class ApiExceptionHandlerTest extends IntegrationTest {
     void conflictProduces409() throws Exception {
         mvc.perform(get("/test-errors/conflict").with(user("u")))
            .andExpect(status().isConflict());
+    }
+
+    @Test
+    void entityNotFoundProduces404() throws Exception {
+        mvc.perform(get("/test-errors/entity-not-found").with(user("u")))
+           .andExpect(status().isNotFound())
+           .andExpect(content().contentType("application/problem+json"));
+    }
+
+    @Test
+    void dataIntegrityViolationProduces409() throws Exception {
+        mvc.perform(get("/test-errors/data-integrity").with(user("u")))
+           .andExpect(status().isConflict())
+           .andExpect(content().contentType("application/problem+json"))
+           .andExpect(jsonPath("$.detail").value("Conflicting resource state"));
     }
 
     @Test
