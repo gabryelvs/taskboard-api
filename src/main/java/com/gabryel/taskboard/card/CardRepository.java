@@ -13,4 +13,12 @@ public interface CardRepository extends JpaRepository<Card, UUID> {
     @Modifying
     @Query("update Card c set c.assignee = null where c.assignee.id = :userId and c.column.project.id = :projectId")
     void unassignUserInProject(UUID projectId, UUID userId);
+
+    @Modifying
+    @Query("update Card c set c.position = c.position - 1 where c.column.id = :columnId and c.position > :position")
+    void shiftDownAfter(UUID columnId, int position);
+
+    @Modifying
+    @Query("update Card c set c.position = c.position + 1 where c.column.id = :columnId and c.position >= :position")
+    void shiftUpFrom(UUID columnId, int position);
 }
