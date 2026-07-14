@@ -3,6 +3,9 @@ primary_region = "lhr"
 
 [build]
 
+[env]
+  SPRING_PROFILES_ACTIVE = "prod"
+
 [http_service]
   internal_port = 8080
   force_https = true
