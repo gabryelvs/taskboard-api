@@ -24,6 +24,18 @@ public class CardController {
         return service.listByColumn(userId, columnId);
     }
 
+    @GetMapping("/projects/{projectId}/cards")
+    public List<CardResponse> filter(@AuthenticationPrincipal UUID userId,
+                                     @PathVariable UUID projectId,
+                                     @RequestParam(required = false) Priority priority,
+                                     @RequestParam(required = false)
+                                     @org.springframework.format.annotation.DateTimeFormat(
+                                         iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME)
+                                     java.time.Instant dueBefore,
+                                     @RequestParam(required = false) UUID assigneeId) {
+        return service.filter(userId, projectId, priority, dueBefore, assigneeId);
+    }
+
     @PostMapping("/columns/{columnId}/cards")
     @ResponseStatus(HttpStatus.CREATED)
     public CardResponse create(@AuthenticationPrincipal UUID userId,

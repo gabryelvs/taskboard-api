@@ -54,6 +54,14 @@ public class CardService {
                 .map(CardDtos::toResponse).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<CardResponse> filter(UUID userId, UUID projectId, Priority priority,
+                                     java.time.Instant dueBefore, UUID assigneeId) {
+        access.requireMember(projectId, userId);
+        return cards.filter(projectId, priority, dueBefore, assigneeId).stream()
+                .map(CardDtos::toResponse).toList();
+    }
+
     @Transactional
     public CardResponse create(UUID userId, UUID columnId, CardCreateRequest req) {
         BoardColumn col = columnService.requireColumn(columnId, userId);
