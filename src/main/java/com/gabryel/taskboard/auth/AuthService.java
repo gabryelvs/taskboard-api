@@ -60,11 +60,16 @@ public class AuthService {
         return issueTokens(user);
     }
 
-    @Transactional
+    // the revoke-family write inside the reuse-detection branch below must survive even
+    // though the method then throws UnauthorizedException, so exclude it from rollback
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public AuthResponse refresh(String refreshToken) {
         RefreshToken stored = refreshTokens.findByTokenHash(sha256(refreshToken))
                 .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
         if (stored.isRevoked() || stored.getExpiresAt().isBefore(Instant.now())) {
+            // reuse of an already-revoked (or expired) token indicates possible theft:
+            // revoke the entire token family for this user
+            refreshTokens.revokeAllForUser(stored.getUser().getId());
             throw new UnauthorizedException("Invalid refresh token");
         }
         stored.setRevoked(true);

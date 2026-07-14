@@ -39,6 +39,18 @@ class RefreshTest extends IntegrationTest {
     }
 
     @Test
+    void reusedRefreshTokenRevokesWholeFamily() throws Exception {
+        String tokenA = register("ref5@test.com");
+        String body = refreshCall(tokenA).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String tokenB = om.readTree(body).get("refreshToken").asText();
+
+        refreshCall(tokenA).andExpect(status().isUnauthorized()); // reuse of revoked token A
+
+        refreshCall(tokenB).andExpect(status().isUnauthorized()); // family revoked -> B dead too
+    }
+
+    @Test
     void unknownRefreshTokenIs401() throws Exception {
         refreshCall("does-not-exist").andExpect(status().isUnauthorized());
     }
