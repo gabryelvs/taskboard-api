@@ -22,8 +22,11 @@ import java.util.Optional;
  * value (and {@code DATABASE_USER}/{@code DATABASE_PASSWORD}) keeps working
  * unchanged, since {@link DatabaseUrlParser} then reports nothing to do.
  *
- * <p>Registered via
- * {@code META-INF/spring/org.springframework.boot.env.EnvironmentPostProcessor.imports}.
+ * <p>Registered via the classic {@code META-INF/spring.factories}. The
+ * newer {@code META-INF/spring/*.imports} file (Boot 3's usual mechanism
+ * for this) was tried first but, verified by running the packaged
+ * executable jar, never gets picked up here — {@code spring.factories}
+ * does, so that's what ships.
  */
 public class DatabaseUrlEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
