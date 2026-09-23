@@ -3,6 +3,19 @@ spring:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/taskboard}
     username: ${DATABASE_USER:taskboard}
     password: ${DATABASE_PASSWORD:taskboard}
+    hikari:
+      # Small, fixed pool sized for a 512 MB / shared-CPU instance (Koyeb's
+      # free tier) talking to a Postgres that itself caps connections.
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:5}
+      # Neon's free tier suspends its compute after a few minutes with no
+      # active query, which silently drops whatever is sitting idle in the
+      # pool. Recycling connections (max-lifetime) and pinging idle ones
+      # (keepalive-time) faster than that window keeps Hikari from ever
+      # handing the app a connection Neon has already killed; Hikari's own
+      # borrow-time isValid() check is the last line of defence for
+      # anything that still slips through.
+      max-lifetime: ${DB_POOL_MAX_LIFETIME_MS:270000}
+      keepalive-time: ${DB_POOL_KEEPALIVE_TIME_MS:240000}
   jpa:
     hibernate:
       ddl-auto: validate
