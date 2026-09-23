@@ -6,7 +6,7 @@
 Trello-like task manager REST API: projects, invite-only membership, ordered
 columns and cards, comments, priorities and deadlines. Java 21 / Spring Boot 3.3.
 
-**Live demo:** set once the Koyeb service exists.
+**Live demo:** https://taskboard-api-h3yu.onrender.com/swagger-ui.html (Swagger UI). The free instance sleeps when idle, so the first request after a quiet spell can take a minute or two.
 
 ## Highlights
 
@@ -136,18 +136,18 @@ curl -s -X PATCH http://localhost:8080/cards/<cardId>/move \
 
 ## Deploy
 
-Deploys to [Koyeb](https://www.koyeb.com)'s free instance (a Docker web
-service, 512 MB RAM / shared CPU, scales to zero after ~1h idle) with
-[Neon](https://neon.tech) serverless Postgres as the database.
+Deploys to a [Render](https://render.com) free web service (built from the
+`Dockerfile`, 512 MB RAM / 0.1 CPU, spins down after 15 minutes without
+traffic) with [Neon](https://neon.tech) serverless Postgres as the database.
+Render redeploys on every push to `main`.
 
-**Koyeb service settings**
+**Render service settings**
 
 | Setting | Value |
 |---|---|
 | Build | from the included `Dockerfile` |
-| Port | `8080` |
-| Health check | HTTP `GET /actuator/health` |
-| Grace period | 90s — measured cold start under 512 MB / 0.25 vCPU was ~38s (see below); 90s leaves headroom |
+| Port | `8080`, set with the `PORT` environment variable below |
+| Health check path | `/actuator/health` |
 
 **Environment variables**
 
@@ -156,11 +156,13 @@ service, 512 MB RAM / shared CPU, scales to zero after ~1h idle) with
 | `DATABASE_URL` | Neon's **direct** (non-pooler) connection string, pasted as-is — e.g. `postgresql://user:pass@ep-xxx.eu-west-2.aws.neon.tech/taskboard?sslmode=require&channel_binding=require`. The app converts it to a JDBC URL itself (see `DatabaseUrlEnvironmentPostProcessor`). The direct string is required, not the pooled one: Flyway takes session-level advisory locks that PgBouncer's transaction pooling breaks. |
 | `JWT_SECRET` | 32+ random bytes, e.g. `openssl rand -hex 32` |
 | `SPRING_PROFILES_ACTIVE` | `prod` |
+| `PORT` | `8080` (tells Render which port the app listens on) |
 
-**Honest caveat:** the free instance sleeps after about an hour idle,
-so the first request after that waits for a fresh start-up (cold start
-measured at ~38s locally; Neon's own compute may also need to resume
-from suspend on top of that).
+**Honest caveat:** the free instance spins down after 15 minutes idle,
+so the first request after that waits for the instance to come back and
+Spring to start. Start-up measured at ~38s locally with a quarter of a
+CPU; Render's free instance has 0.1 CPU, so expect a minute or more, plus
+Neon resuming from suspend.
 
 Startup was measured with:
 
