@@ -76,7 +76,9 @@ public class ColumnService {
         UUID projectId = col.getProject().getId();
         int pos = col.getPosition();
         columns.delete(col);
-        columns.flush(); // delete before shifting so unique/dense invariant holds
+        // flush the delete before the bulk shift. Dense 0..n-1 positions are kept by this
+        // service's shift logic only; the schema has no unique(project_id, position)
+        columns.flush();
         columns.shiftLeftAfter(projectId, pos);
     }
 }

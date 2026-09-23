@@ -19,8 +19,8 @@ columns and cards, comments, priorities and deadlines. Java 21 / Spring Boot 3.3
   pessimistic locks on both columns, closes the gap in the source column and
   opens one in the target; positions stay 0..n-1 with no fractional-rank hacks.
 - **RFC 7807 errors** — every failure is `application/problem+json`.
-- **Real-database tests** — 55 integration tests against PostgreSQL via
-  Testcontainers, run on every push in GitHub Actions.
+- **Real-database tests** — 62 tests: 59 integration tests against PostgreSQL
+  via Testcontainers plus 3 unit tests, run on every push in GitHub Actions.
 - **Flyway migrations** — schema is versioned; Hibernate runs in
   `ddl-auto: validate` only.
 
