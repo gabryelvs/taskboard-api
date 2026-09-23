@@ -6,8 +6,7 @@
 Trello-like task manager REST API: projects, invite-only membership, ordered
 columns and cards, comments, priorities and deadlines. Java 21 / Spring Boot 3.3.
 
-**Live demo:** https://taskboard-gv.fly.dev/swagger-ui.html
-(first request may take ~15s — the machine auto-stops when idle)
+**Live demo:** set once the Koyeb service exists.
 
 ## Highlights
 
@@ -19,8 +18,8 @@ columns and cards, comments, priorities and deadlines. Java 21 / Spring Boot 3.3
   pessimistic locks on both columns, closes the gap in the source column and
   opens one in the target; positions stay 0..n-1 with no fractional-rank hacks.
 - **RFC 7807 errors** — every failure is `application/problem+json`.
-- **Real-database tests** — 62 tests: 59 integration tests against PostgreSQL
-  via Testcontainers plus 3 unit tests, run on every push in GitHub Actions.
+- **Real-database tests** — 72 tests: 59 integration tests against PostgreSQL
+  via Testcontainers plus 13 unit tests, run on every push in GitHub Actions.
 - **Flyway migrations** — schema is versioned; Hibernate runs in
   `ddl-auto: validate` only.
 
@@ -137,16 +136,44 @@ curl -s -X PATCH http://localhost:8080/cards/<cardId>/move \
 
 ## Deploy
 
-The included `Dockerfile` and `fly.toml` deploy to Fly.io:
+Deploys to [Koyeb](https://www.koyeb.com)'s free instance (a Docker web
+service, 512 MB RAM / shared CPU, scales to zero after ~1h idle) with
+[Neon](https://neon.tech) serverless Postgres as the database.
+
+**Koyeb service settings**
+
+| Setting | Value |
+|---|---|
+| Build | from the included `Dockerfile` |
+| Port | `8080` |
+| Health check | HTTP `GET /actuator/health` |
+| Grace period | 90s — measured cold start under 512 MB / 0.25 vCPU was ~38s (see below); 90s leaves headroom |
+
+**Environment variables**
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | Neon's **direct** (non-pooler) connection string, pasted as-is — e.g. `postgresql://user:pass@ep-xxx.eu-west-2.aws.neon.tech/taskboard?sslmode=require&channel_binding=require`. The app converts it to a JDBC URL itself (see `DatabaseUrlEnvironmentPostProcessor`). The direct string is required, not the pooled one: Flyway takes session-level advisory locks that PgBouncer's transaction pooling breaks. |
+| `JWT_SECRET` | 32+ random bytes, e.g. `openssl rand -hex 32` |
+| `SPRING_PROFILES_ACTIVE` | `prod` |
+
+**Honest caveat:** the free instance sleeps after about an hour idle,
+so the first request after that waits for a fresh start-up (cold start
+measured at ~38s locally; Neon's own compute may also need to resume
+from suspend on top of that).
+
+Startup was measured with:
 
 ```bash
-fly launch --no-deploy        # or reuse the committed fly.toml
-fly secrets set JWT_SECRET=<256-bit secret> DATABASE_URL=<jdbc url> \
-  DATABASE_USER=<user> DATABASE_PASSWORD=<password>
-fly deploy
+docker build -t taskboard-api .
+docker run --rm --memory=512m --cpus=0.25 -p 8080:8080 \
+  -e DATABASE_URL=postgresql://... -e SPRING_PROFILES_ACTIVE=prod \
+  -e JWT_SECRET=$(openssl rand -hex 32) taskboard-api
 ```
 
-Health checks hit `/actuator/health`.
+against a throwaway `postgres:16` container on a Docker network, which
+logged `Started TaskboardApplication in 38.004 seconds` and served
+`{"status":"UP"}` from `/actuator/health`.
 
 ## License
 
